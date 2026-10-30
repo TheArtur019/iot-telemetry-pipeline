@@ -45,8 +45,8 @@
 
 ### 1. Клонирование и подготовка
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/TheArtur019/iot-telemetry-pipeline
+cd iot-telemetry-pipeline
 ```
 
 ### 2. Сборка и запуск контейнеров
