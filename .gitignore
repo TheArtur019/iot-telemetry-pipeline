@@ -1,0 +1,25 @@
+# Окружение и секреты
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Локальные данные и сгенерированные файлы
+*.sqlite3
+results.csv
+
+# Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Тесты
+.coverage
+htmlcov/
+.pytest_cache/

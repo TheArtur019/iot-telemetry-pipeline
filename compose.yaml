@@ -1,0 +1,124 @@
+name: telemetry-pipeline
+x-app: &app
+  image: telemetry-pipeline-app:1
+  pull_policy: never
+  environment: &env
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    POSTGRES_DB: monitoring
+    POSTGRES_USER: student
+    POSTGRES_PASSWORD: student_lab
+    POSTGRES_HOST: db
+  restart: "no"
+services:
+  kafka-volume-init:
+    image: apache/kafka:4.1.2
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - chown -R 1000:1000 /tmp/kraft-combined-logs
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    restart: "no"
+  kafka:
+    image: apache/kafka:4.1.2
+    depends_on:
+      kafka-volume-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >-
+        PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+  db:
+    image: postgres:16.10-bookworm
+    environment:
+      POSTGRES_DB: monitoring
+      POSTGRES_USER: student
+      POSTGRES_PASSWORD: student_lab
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U student -d monitoring"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  init-topics:
+    <<: *app
+    command: python -m services.init_topics
+    depends_on:
+      kafka:
+        condition: service_healthy
+  migrate:
+    <<: *app
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        python tools/check_project.py --require-migrations
+        && python manage.py migrate --noinput
+    depends_on:
+      db:
+        condition: service_healthy
+  generator:
+    <<: *app
+    command: python -m services.generator
+    environment:
+      <<: *env
+      SOURCE_ID: generator-1
+      SEND_INTERVAL: ${SEND_INTERVAL:-1}
+      ANOMALY_PROBABILITY: ${ANOMALY_PROBABILITY:-0.15}
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+  processor:
+    <<: *app
+    command: python -m services.processor
+    environment:
+      <<: *env
+      PROCESSING_DELAY: ${PROCESSING_DELAY:-0.1}
+      TEMPERATURE_THRESHOLD: ${TEMPERATURE_THRESHOLD:-80}
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+  monitor-consumer:
+    <<: *app
+    command: python manage.py consume_events
+    depends_on:
+      init-topics:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+  web:
+    <<: *app
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  kafka_data:
+  postgres_data:

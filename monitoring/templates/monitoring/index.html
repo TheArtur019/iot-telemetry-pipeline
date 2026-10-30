@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мониторинг телеметрии</title>
+<style>
+body {font:16px system-ui;max-width:1100px;margin:35px auto;padding:20px}
+h1,h2 {color:#19354a} table {border-collapse:collapse;width:100%}
+th,td {padding:9px;text-align:left;border-bottom:1px solid #ddd}
+#error {color:#a00} #summary {padding:15px;background:#edf3f6}
+</style>
+<h1>Мониторинг телеметрии</h1>
+<p>Heartbeat подтверждает отправку служебных сообщений,
+но не гарантирует выполнение полезной работы.</p>
+<p id="error"></p><p id="summary">Загрузка…</p>
+<h2>Системы</h2>
+<table><thead><tr><th>Источник</th><th>Свежесть</th>
+<th>Возраст, с</th><th>Сообщённое состояние</th></tr></thead>
+<tbody id="systems"></tbody></table>
+<h2>Последние измерения</h2>
+<table><thead><tr><th>Оборудование</th><th>Температура, °C</th>
+<th>Результат</th><th>Время измерения</th></tr></thead>
+<tbody id="results"></tbody></table>
+<h2>Некорректные сообщения</h2><pre id="invalid"></pre>
+<script>
+function rows(id, values) {
+  const body = document.getElementById(id);
+  body.replaceChildren();
+  for (const valuesRow of values) {
+    const row = document.createElement('tr');
+    for (const value of valuesRow) {
+      const cell = document.createElement('td');
+      cell.textContent = value ?? '—';
+      row.appendChild(cell);
+    }
+    body.appendChild(row);
+  }
+}
+async function refresh() {
+  try {
+    const response = await fetch('/api/state/', {cache:'no-store'});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    document.getElementById('error').textContent = '';
+    document.getElementById('summary').textContent =
+      `За 5 минут: ${data.total_5m}; предупреждений: ` +
+      `${data.warnings_5m}. Последняя запись в БД: ` +
+      `${data.last_ingested_at ?? 'нет данных'}`;
+    rows('systems', data.systems.map(s =>
+      [s.source, s.freshness, s.age, s.reported_status]));
+    rows('results', data.results.map(r =>
+      [r.device_id, r.value, r.status, r.measured_at]));
+    document.getElementById('invalid').textContent =
+      JSON.stringify(data.invalid, null, 2);
+  } catch (error) {
+    document.getElementById('error').textContent =
+      'Обновление недоступно; показанные данные могли устареть. ' + error;
+  } finally {
+    setTimeout(refresh, 3000);
+  }
+}
+refresh();
+</script>
+</html>
