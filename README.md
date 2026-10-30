@@ -41,30 +41,6 @@
 
 ---
 
-## Структура репозитория
-
-```text
-├── config/              # Конфигурация Django проекта (settings, urls)
-├── monitoring/          # Основное Django-приложение
-│   ├── management/      # Фоновые команды (consume_events)
-│   ├── models.py        # Модели EventLog, MeasurementResult, SystemState
-│   ├── ingestion.py     # Идемпотентный пайплайн вставки в БД
-│   └── tests.py         # Юнит-тесты консьюмера и дедупликации
-├── services/            # Автономные сервисы обработки
-│   ├── common.py        # Базовые обертки Kafka Producer/Consumer, поток heartbeat
-│   ├── generator.py     # Имитатор потока измерений с датчиков
-│   ├── processor.py     # Обработка, классификация и публикация результатов
-│   ├── validation.py    # Валидация контракта входящих событий
-│   └── init_topics.py   # Инициализация топиков через AdminClient
-├── tools/
-│   └── check_project.py # Статическая AST-проверка структуры файлов и синтаксиса
-├── compose.yaml         # Описание многоконтейнерного стенда
-├── Dockerfile           # Базовый Docker-образ сервисов
-└── requirements.txt     # Зависимости проекта
-```
-
----
-
 ## Инструкция по запуску
 
 ### 1. Клонирование и подготовка
